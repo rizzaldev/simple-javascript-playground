@@ -247,19 +247,8 @@
           </div>
         </div>
         <div class="code-editor">
-          <textarea
-            id="code-input"
-            placeholder="// Write your JavaScript code here...
-// Example:
-console.log('Hello, World!');
-
-function fibonacci(n) {
-    if (n <= 1) return n;
-    return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-console.log('Fibonacci(10):', fibonacci(10));"
-          ></textarea>
+          <!-- Monaco will replace this div -->
+          <div id="editor" style="height: 350px"></div>
         </div>
       </div>
 
@@ -279,14 +268,11 @@ console.log('Fibonacci(10):', fibonacci(10));"
     <script>
       // State management
       let outputElement = document.getElementById("output");
-      let codeInput = document.getElementById("code-input");
+      let editor; // Monaco editor instance
 
       // Initialize with saved code or default
       function initializeEditor() {
-        const savedCode = getSavedCode();
-        if (savedCode) {
-          codeInput.value = savedCode;
-        }
+        // Monaco init happens below (async). keep function for consistency.
       }
 
       // Storage functions (using in-memory storage as per requirements)
@@ -302,10 +288,7 @@ console.log('Fibonacci(10):', fibonacci(10));"
         codeStorage.code = code;
       }
 
-      // Save code on input
-      codeInput.addEventListener("input", function () {
-        saveCode(this.value);
-      });
+      // Monaco will save on change (set up after load)
 
       // Output management
       function addOutput(message, type = "log") {
@@ -326,14 +309,16 @@ console.log('Fibonacci(10):', fibonacci(10));"
       }
 
       function clearCode() {
-        codeInput.value = "";
+        if (editor) {
+          editor.setValue("");
+        }
         saveCode("");
         clearOutput();
       }
 
       // Safe code execution
       function runCode() {
-        const code = codeInput.value.trim();
+        const code = (editor ? editor.getValue() : "").trim();
 
         if (!code) {
           clearOutput();
@@ -380,13 +365,13 @@ console.log('Fibonacci(10):', fibonacci(10));"
           // Capture return value
           const script = iframeDocument.createElement("script");
           script.textContent = `
-                    try {
-                        ${code}
-                    } catch (error) {
-                        console.error(error.message);
-                        throw error;
-                    }
-                `;
+                           try {
+                               ${code}
+                           } catch (error) {
+                               console.error(error.message);
+                               throw error;
+                           }
+                       `;
 
           iframeDocument.body.appendChild(script);
 
@@ -418,27 +403,64 @@ console.log('Fibonacci(10):', fibonacci(10));"
         return String(value);
       }
 
-      // Keyboard shortcuts
-      codeInput.addEventListener("keydown", function (e) {
-        // Ctrl/Cmd + Enter to run
-        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-          e.preventDefault();
-          runCode();
-        }
-
-        // Tab support
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const start = this.selectionStart;
-          const end = this.selectionEnd;
-          const value = this.value;
-          this.value = value.substring(0, start) + "  " + value.substring(end);
-          this.selectionStart = this.selectionEnd = start + 2;
-        }
-      });
+      // Monaco will handle Tab and many keybindings. Add Ctrl/Cmd+Enter run command below.
 
       // Initialize
       initializeEditor();
+
+      /* ===================== Monaco Editor load ===================== */
+      (function loadMonaco() {
+        const MONACO_CDN =
+          "https://cdn.jsdelivr.net/npm/monaco-editor@0.39.0/min";
+        const loader = document.createElement("script");
+        loader.src = MONACO_CDN + "/vs/loader.js";
+        loader.onload = () => {
+          require.config({ paths: { vs: MONACO_CDN + "/vs" } });
+          require(["vs/editor/editor.main"], function () {
+            editor = monaco.editor.create(document.getElementById("editor"), {
+              value:
+                getSavedCode() ||
+                `// Write your JavaScript code here...\nconsole.log('Hello, World!');`,
+              language: "javascript",
+              theme: "vs-dark", // "vs" for light theme
+              automaticLayout: true,
+              minimap: { enabled: false },
+              fontFamily: "Courier New, monospace",
+              fontSize: 14,
+            });
+
+            // Save on change
+            editor.onDidChangeModelContent(() => saveCode(editor.getValue()));
+
+            // Ctrl/Cmd  Enter to run
+            editor.addCommand(
+              monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+              () => {
+                runCode();
+              }
+            );
+          });
+        };
+        document.body.appendChild(loader);
+      })();
     </script>
+
+    <style>
+      /* Replace textarea styles with editor container */
+      #editor {
+        width: 100%;
+        min-height: 300px;
+        padding: 0; /* Monaco controls padding */
+        font-family: "Courier New", Courier, monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        border: none;
+        outline: none;
+        resize: vertical;
+        background: #282c34;
+        color: #abb2bf;
+        tab-size: 2;
+      }
+    </style>
   </body>
 </html>
